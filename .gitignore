@@ -1,0 +1,19 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+*.swp
+
+# Node (ถ้ามี)
+node_modules/
+npm-debug.log*
+
+# Sensitive: อย่า push API keys หรือ local data
+*.env
+.env.local
+
+# localStorage data ไม่มีในโปรเจกต์ (เก็บในเบราว์เซอร์)
+# แต่ถ้ามีไฟล์ backup ข้อมูล ให้ exclude ด้วย
+*.json.bak
+mtp_db_backup*.json

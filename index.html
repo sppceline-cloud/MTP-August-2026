@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTP Wood Thailand - ระบบจัดการและสรุปการเงิน</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Chart.js CDN (defer to unblock rendering) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Tesseract.js: Lazy-loaded on demand when scanning (saves ~2MB on first paint) -->
+    <!-- PDF.js CDN (defer) -->
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <!-- SheetJS CDN for Excel (defer) -->
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+    <!-- Loading Splash Screen (shown instantly while CDN scripts load) -->
+    <div id="app-loading-splash" style="
+        position: fixed; inset: 0; z-index: 99999;
+        background: linear-gradient(135deg, #faf6f0 0%, #f0e8da 100%);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        font-family: 'Sarabun', 'Inter', sans-serif; transition: opacity 0.4s ease;
+    ">
+        <div style="
+            width: 60px; height: 60px; border-radius: 16px;
+            background: linear-gradient(135deg, #5d6e53, #8b7355);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 1.5rem; animation: pulse-loading 1.5s infinite;
+        ">
+            <svg viewBox="0 0 24 24" style="width: 32px; height: 32px; fill: white;">
+                <path d="M20.17 9.55l-6.15-6.15a2.53 2.53 0 00-3.54 0L4.33 9.55A3.77 3.77 0 003.22 12.2c0 .9.33 1.79.97 2.45L10.32 20.8a2.53 2.53 0 003.54 0l6.15-6.15a3.79 3.79 0 001.16-2.65c0-.9-.33-1.79-.97-2.45z"/>
+            </svg>
+        </div>
+        <div style="font-size: 1.3rem; font-weight: 700; color: #5d6e53; margin-bottom: 0.5rem;">MTP Wood Thailand</div>
+        <div style="font-size: 0.85rem; color: #8b7355;" id="loading-splash-status">กำลังเตรียมระบบ...</div>
+        <div style="
+            margin-top: 1.2rem; width: 180px; height: 4px; border-radius: 4px;
+            background: #e8ded2; overflow: hidden;
+        ">
+            <div style="
+                width: 40%; height: 100%; border-radius: 4px;
+                background: linear-gradient(90deg, #5d6e53, #8b7355);
+                animation: loading-bar 1.8s ease-in-out infinite;
+            "></div>
+        </div>
+        <style>
+            @keyframes pulse-loading {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.08); opacity: 0.85; }
+            }
+            @keyframes loading-bar {
+                0% { transform: translateX(-100%); }
+                50% { transform: translateX(120%); }
+                100% { transform: translateX(300%); }
+            }
+        </style>
+    </div>
+    <div class="container">
+        <!-- Shared Workspace Control Banner -->
+        <div id="shared-workspace-banner" class="glass-card" style="display: none; padding: 1rem 1.5rem; margin-bottom: 1.5rem; border-left: 5px solid var(--accent-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                <div style="font-size: 0.95rem; color: var(--text-primary);" id="shared-workspace-banner-text">
+                    <!-- Loaded dynamically -->
+                </div>
+                <div style="display: flex; gap: 0.75rem;" id="shared-workspace-banner-actions">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- App Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M20.17 9.55l-6.15-6.15a2.53 2.53 0 00-3.54 0L4.33 9.55A3.77 3.77 0 003.22 12.2c0 .9.33 1.79.97 2.45L10.32 20.8a2.53 2.53 0 003.54 0l6.15-6.15a3.79 3.79 0 001.16-2.65c0-.9-.33-1.79-.97-2.45zM12 4.41l5.47 5.47H6.53L12 4.41zM6.53 11.88h10.94l-5.47 5.47-5.47-5.47z"/>
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>MTP Wood Thailand</h1>
+                    <p>ระบบบูรณาการสรุปผลการดำเนินงานและการเงินประจำเดือน</p>
+                </div>
+            </div>
+            
+            <div class="header-controls">
+                <!-- Import JSON Unified Header Button -->
+                <button class="btn btn-secondary" onclick="switchTab('scan')" id="btn-header-import-json" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-color: var(--border-hover); background-color: var(--accent-light); color: var(--accent-color); font-weight: 600;">
+                    <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: currentColor; margin-right: 0.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                    นำเข้าข้อมูล (Import JSON)
+                </button>
+
+                <!-- Share Link button -->
+                <button class="btn btn-secondary" onclick="openShareModal()" id="btn-share-link" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-color: var(--border-hover);">
+                    <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: currentColor; margin-right: 0.25rem;"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+                    แชร์ลิงก์ดูออนไลน์
+                </button>
+
+                <!-- Consolidated Excel Exporter -->
+                <button class="btn btn-primary" onclick="exportClosingToExcel()" style="padding: 0.4rem 1rem; font-size: 0.85rem;">
+                    <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: currentColor; margin-right: 0.25rem;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                    ส่งออกงบการเงินรวม (Excel)
+                </button>
+
+                <!-- PDF Summary Exporter -->
+                <button class="btn btn-secondary" onclick="exportToPDF()" id="btn-export-pdf" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-color: var(--border-hover);">
+                    <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: currentColor; margin-right: 0.25rem;"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                    ส่งออกรายงาน (PDF)
+                </button>
+
+                <!-- Month / Year Selector -->
+                <div class="month-selector-wrapper">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5H7v2h5v-2z"/>
+                    </svg>
+                    <select id="month-selector" class="month-select" onchange="handleMonthChange()">
+                        <option value="all">🌐 ดูข้อมูลรวมทุกเดือน (All-Time)</option>
+                        <option value="2026-06">มิถุนายน 2569</option>
+                        <option value="2026-07" selected>กรกฎาคม 2569</option>
+                        <option value="2026-08">สิงหาคม 2569</option>
+                        <option value="2026-09">กันยายน 2569</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="tab-navigation">
+            <button class="tab-btn active" id="tab-overview" onclick="switchTab('overview')">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm3-4H7v-2h8v2zm3-4H7V7h11v2z"/></svg>
+                ภาพรวมการดำเนินงาน
+            </button>
+            <button class="tab-btn" id="tab-vendors" onclick="switchTab('vendors')">
+                <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                สรุปยอดคู่ค้า
+            </button>
+            <button class="tab-btn admin-only" id="tab-scan" onclick="switchTab('scan')">
+                <svg viewBox="0 0 24 24"><path d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"/></svg>
+                นำเข้าข้อมูล JSON
+            </button>
+            <button class="tab-btn" id="tab-mtp-expenses" onclick="switchTab('mtp-expenses')">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0-4H7V7h10v2zm0 8H7v-2h10v2z"/></svg>
+                1. ค่าใช้จ่ายทั่วไป
+            </button>
+            <button class="tab-btn" id="tab-mtp-revenue" onclick="switchTab('mtp-revenue')">
+                <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                MTP รายรับ
+            </button>
+            <button class="tab-btn" id="tab-jamjuree-revenue" onclick="switchTab('jamjuree-revenue')">
+                <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 14H4v-4h11v4zm0-5H4V9h11v4zm5 5h-4V9h4v9z"/></svg>
+                จามจุรีย์ รายรับ
+            </button>
+            <button class="tab-btn" id="tab-twash-loans" onclick="switchTab('twash-loans')">
+                <svg viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5 6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+                2. เงินยืม ที.วอช
+            </button>
+            <button class="tab-btn" id="tab-asawaeng-loans" onclick="switchTab('asawaeng-loans')">
+                <svg viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5 6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+                3. เงินกู้ คุณอาแสวง
+            </button>
+            <button class="tab-btn" id="tab-wan-loans" onclick="switchTab('wan-loans')">
+                <svg viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5 6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+                4. เงินกู้ บ.วัน
+            </button>
+            <button class="tab-btn" id="tab-pimas-expenses" onclick="switchTab('pimas-expenses')">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                5. เงินสำรองจ่าย พี่มัด
+            </button>
+            <button class="tab-btn admin-only" id="tab-settings" onclick="switchTab('settings')">
+                <svg viewBox="0 0 24 24"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
+                ตั้งค่า
+            </button>
+        </nav>
+
+        <!-- Sidebar footer area status -->
+        <div style="margin-top: auto; padding: 1rem 0;">
+            <div class="api-status">
+                <span class="status-dot" id="api-status-dot"></span>
+                <span id="api-status-text">Gemini API: ไม่พร้อมใช้งาน</span>
+            </div>
+        </div>
+
+        <!-- 1. OVERVIEW VIEW -->
+        <section id="view-overview" class="tab-content active">
+            <!-- Demo Warning Alert Banner -->
+            <div id="demo-mode-banner" class="glass-card" style="display: none; background-color: var(--accent-light); border-color: var(--border-hover); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; border-left: 5px solid var(--accent-color);">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div style="font-size: 0.9rem; color: var(--text-primary); line-height: 1.5;">
+                        <strong>💡 กำลังแสดงข้อมูลบัญชีสาธิต:</strong> ข้อมูลนี้มีไว้เพื่อสาธิตการคำนวณและประมวลผลระบบ ก่อนใช้งานจริงกรุณากดปุ่มเพื่อล้างข้อมูล
+                    </div>
+                    <button class="btn btn-danger" onclick="clearDemoDataForRealUse()" style="padding: 0.4rem 1rem; font-size: 0.8rem; border-radius: var(--border-radius-sm);">
+                        ล้างข้อมูลเดโม & เริ่มใช้งานจริง
+                    </button>
+                </div>
+            </div>
+
+            <div class="kpi-grid">
+                <!-- Total Income KPI -->
+                <div class="kpi-card">
+                    <div class="kpi-icon icon-revenue">
+                        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 14H4v-4h11v4zm0-5H4V9h11v4zm5 5h-4V9h4v9z"/></svg>
+                    </div>
+                    <div class="kpi-info">
+                        <h3>รายรับรวมทั้งหมด</h3>
+                        <p id="kpi-total-revenue">฿0.00</p>
+                        <div class="kpi-sub">MTP + จามจุรีย์ รายรับ</div>
+                    </div>
+                </div>
+
+                <!-- Total Expense KPI -->
+                <div class="kpi-card">
+                    <div class="kpi-icon icon-expense">
+                        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0-4H7V7h10v2zm0 8H7v-2h10v2z"/></svg>
+                    </div>
+                    <div class="kpi-info">
+                        <h3>รายจ่ายรวม MTP</h3>
+                        <p id="kpi-total-expenses">฿0.00</p>
+                        <div class="kpi-sub">รวมสลิปและใบเสร็จ</div>
+                    </div>
+                </div>
+
+                <!-- Net MTP Revenue KPI -->
+                <div class="kpi-card">
+                    <div class="kpi-icon icon-balance">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z"/></svg>
+                    </div>
+                    <div class="kpi-info">
+                        <h3>รายรับสุทธิ (MTP Net)</h3>
+                        <p id="kpi-net-profit">฿0.00</p>
+                        <div class="kpi-sub" id="kpi-net-profit-sub">รายรับหักรายจ่ายของ MTP</div>
+                    </div>
+                </div>
+
+                <!-- Total Integrated Loans outstanding KPI -->
+                <div class="kpi-card">
+                    <div class="kpi-icon icon-loan">
+                        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4 6h-4v2h4v2h-4v2h4v2H9V7h6v2z"/></svg>
+                    </div>
+                    <div class="kpi-info">
+                        <h3>ยอดเงินกู้คงค้างรวม</h3>
+                        <p id="kpi-total-loans">฿0.00</p>
+                        <div class="kpi-sub">ที.วอช + อาแสวง + บ.วัน</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Column -->
+            <div class="dashboard-row">
+                <div class="dashboard-card">
+                    <h2>
+                        <svg viewBox="0 0 24 24"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></svg>
+                        เปรียบเทียบรายรับ - รายจ่าย MTP
+                    </h2>
+                    <div class="chart-box">
+                        <canvas id="cashflowChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="dashboard-card">
+                    <h2>
+                        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0-4H7V7h10v2zm0 8H7v-2h10v2z"/></svg>
+                        สัดส่วนการใช้จ่ายของ 1. ค่าใช้จ่ายทั่วไป
+                    </h2>
+                    <div class="breakdown-list" id="expense-breakdown-list">
+                        <!-- Loaded dynamically via js -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summaries row -->
+            <div class="dashboard-row">
+                <div class="dashboard-card">
+                    <h2>
+                        <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 14H4v-4h11v4zm0-5H4V9h11v4zm5 5h-4V9h4v9z"/></svg>
+                        สรุปแผ่นงาน จามจุรีย์ รายรับ
+                    </h2>
+                    <div class="breakdown-list" id="jamjuree-summary-info">
+                        <!-- Loaded dynamically via js -->
+                    </div>
+                </div>
+
+                <div class="dashboard-card">
+                    <h2>
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                        บัญชีพี่มัส - สรุปเงินสำรองจ่าย
+                    </h2>
+                    <div class="breakdown-list" id="pimas-summary-info">
+                        <!-- Loaded dynamically via js -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Integrated Financial Closing Table (ตารางสรุปผลประกอบการแบบครบวงจร) -->
+            <div class="dashboard-card" style="margin-top: 1.5rem;">
+                <h2>
+                    <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0-4H7V7h10v2zm0 8H7v-2h10v2z"/></svg>
+                    รายงานสรุปงบการเงินประจำเดือนแบบครบวงจร
+                </h2>
+                <div class="table-wrapper">
+                    <table class="data-table" id="table-overview-closing">
+                        <thead>
+                            <tr>
+                                <th>ชื่อบัญชี / รายการแจกแจง</th>
+                                <th>คำอธิบายเพิ่มเติม</th>
+                                <th class="text-right">รายรับ (บาท)</th>
+                                <th class="text-right">รายจ่าย (บาท)</th>
+                                <th class="text-right">คงเหลือสุทธิ (บาท)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="overview-closing-body">
+                            <!-- Populated dynamically via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. JSON IMPORT VIEW (REPLACES SCAN RECEIPT/PDF VIEW) -->
+        <section id="view-scan" class="tab-content">
+            <div class="dashboard-card" style="position: relative; overflow: hidden; min-height: 480px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; flex-wrap: wrap; gap: 0.75rem;">
+                    <h2>
+                        <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0-4H7V7h10v2zm0 8H7v-2h10v2z"/></svg>
+                        นำเข้าข้อมูลด่วนผ่าน JSON (JSON Paste Importer)
+                    </h2>
+                </div>
+
+                <div class="ocr-split-grid" style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 2rem;">
+                    <!-- Left: JSON Input -->
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div class="form-group">
+                            <label class="form-label" for="scan-target-ledger" style="color: var(--accent-color); font-weight:700; font-size: 1rem;">นำเข้าบัญชี / แผ่นงานปลายทาง</label>
+                            <select id="scan-target-ledger" class="standard-input" style="border-color: var(--accent-color); background-color: var(--accent-light); font-weight:600;" onchange="handleImportTargetChange()">
+                                <option value="mtp_expenses" selected>1. ค่าใช้จ่ายทั่วไป</option>
+                                <option value="mtp_revenue">MTP รายรับ</option>
+                                <option value="jamjuree-revenue">จามจุรีย์ รายรับ</option>
+                                <option value="twash-loans">2. เงินยืม ที.วอช</option>
+                                <option value="asawaeng-loans">3. เงินกู้ คุณอาแสวง</option>
+                                <option value="wan-loans">4. เงินกู้ บ.วัน</option>
+                                <option value="pimas-expenses">5. เงินสำรองจ่าย พี่มัด</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="scan-json-textarea">ข้อมูลธุรกรรม JSON (อาร์เรย์ของออบเจกต์)</label>
+                            <textarea id="scan-json-textarea" class="standard-input" placeholder="วางข้อมูล JSON ที่นี่..." style="height: 380px; font-family: monospace; font-size: 0.82rem; width: 100%; box-sizing: border-box; resize: vertical; line-height: 1.4;"></textarea>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 0.5rem;">
+                            <button class="btn btn-secondary" onclick="clearImportTextarea()" style="padding: 0.5rem 12px;">ล้างข้อมูล</button>
+                            <button class="btn btn-primary" onclick="executeJSONImport()" style="padding: 0.5rem 1.5rem;">
+                                <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: currentColor; margin-right: 0.25rem;"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+                                นำเข้าเข้าบัญชีที่เลือก
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Guidelines & Expected JSON Preview -->
+                    <div style="display: flex; flex-direction: column; gap: 1rem; background: var(--bg-secondary); padding: 1.25rem; border-radius: var(--border-radius); border: 1px solid var(--border-color); max-height: 520px; overflow-y: auto;">
+                        <h4 style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.35rem;">
+                            <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: var(--accent-color);"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                            ตัวอย่างโครงสร้าง JSON ที่แนะนำ
+                        </h4>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+                            เมื่อเปลี่ยนประเภทบัญชีทางซ้าย ตัวอย่างรูปแบบ JSON ด้านล่างจะเปลี่ยนให้เหมาะสมกับโครงสร้างบัญชีนั้น ๆ
+                        </div>
+                        <pre id="scan-json-template" style="background: var(--accent-light); padding: 0.85rem; border-radius: var(--border-radius-sm); border: 1px solid var(--border-hover); font-family: monospace; font-size: 0.78rem; white-space: pre-wrap; word-break: break-all; color: var(--text-primary); line-height: 1.4; margin: 0.5rem 0; overflow-x: auto;"></pre>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+                            💡 <strong>คำแนะนำ:</strong>
+                            <ul style="padding-left: 1.1rem; margin-top: 0.25rem;">
+                                <li>วันที่ระบุในรูปแบบ YYYY-MM-DD (เช่น 2026-07-06)</li>
+                                <li>จำนวนเงิน (amount) ต้องเป็นตัวเลข</li>
+                                <li>หากคีย์ข้อมูลไม่ตรงระบบจะทำการจับคู่ (Mapping) ให้อัตโนมัติ</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VENDOR / RECIPIENT SUMMARY VIEW -->
+        <section id="view-vendors" class="tab-content">
+            <div class="table-section">
+                <div class="table-header">
+                    <h2 style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <svg viewBox="0 0 24 24" style="width:24px; height:24px; fill:var(--accent-color);"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                        สรุปยอดสะสมการจ่ายเงินตามผู้รับเงิน / คู่ค้า
+                    </h2>
+                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <label class="form-label" for="vendor-start-date" style="font-size: 0.8rem; margin-bottom: 0; white-space: nowrap;">เริ่มต้น:</label>
+                            <input type="date" id="vendor-start-date" class="standard-input" onchange="renderVendorSummaryTable()" style="width: 140px; font-size: 0.85rem; padding: 0.25rem 0.5rem;">
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <label class="form-label" for="vendor-end-date" style="font-size: 0.8rem; margin-bottom: 0; white-space: nowrap;">สิ้นสุด:</label>
+                            <input type="date" id="vendor-end-date" class="standard-input" onchange="renderVendorSummaryTable()" style="width: 140px; font-size: 0.85rem; padding: 0.25rem 0.5rem;">
+                        </div>
+                        <div class="search-box">
+                            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                            <input type="text" id="vendor-search" placeholder="ค้นหาคู่ค้า/ผู้รับเงิน..." oninput="renderVendorSummaryTable()" style="padding: 0.25rem 0.5rem 0.25rem 2rem; font-size: 0.85rem;">
+                        </div>
+                        <button class="btn btn-secondary" onclick="resetVendorFilters()" style="padding: 0.35rem 1rem; font-size: 0.8rem;">
+                            ล้างตัวกรอง
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper" style="margin-top: 1rem;">
+                    <table class="data-table" id="table-vendors">
+                        <!-- Populated dynamically via JS -->
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. MTP EXPENSES TAB (MTP รายจ่าย) -->
+        <section id="view-mtp-expenses" class="tab-content">
+            <div class="table-section">
+                <div class="table-header">
+                    <h2 id="title-mtp-expenses">รายการบัญชี 1. ค่าใช้จ่ายทั่วไป</h2>
+                    <div class="search-and-actions">
+                        <button class="btn btn-secondary" onclick="quickImportForSheet('mtp-expenses')" style="background-color: var(--accent-light); color: var(--accent-color); border-color: var(--border-hover);">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                            นำเข้า JSON
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportSingleSheetToExcel('mtp-expenses')">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                            ส่งออก Excel
+                        </button>
+                        <div class="search-box">
+                            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                            <input type="text" id="search-mtp-expenses" placeholder="ค้นหา วันที่, รายการ, หมายเหตุ..." oninput="handleSearch('mtp-expenses')">
+                        </div>
+                        <button class="btn btn-primary" onclick="openAddEntryModal('mtp-expenses')">+ เพิ่มรายการ</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table" id="table-mtp-expenses">
+                        <!-- Rendered dynamically -->
+                    </table>
+                </div>
+
+                <div class="table-footer">
+                    <div class="page-info" id="info-mtp-expenses">กำลังโหลดข้อมูล...</div>
+                    <div class="page-controls" id="controls-mtp-expenses">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. MTP REVENUE TAB (MTP รายรับ) -->
+        <section id="view-mtp-revenue" class="tab-content">
+            <div class="table-section">
+                <div class="table-header">
+                    <h2 id="title-mtp-revenue">รายการบัญชี MTP รายรับ</h2>
+                    <div class="search-and-actions">
+                        <button class="btn btn-secondary" onclick="quickImportForSheet('mtp-revenue')" style="background-color: var(--accent-light); color: var(--accent-color); border-color: var(--border-hover);">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                            นำเข้า JSON
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportSingleSheetToExcel('mtp-revenue')">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                            ส่งออก Excel
+                        </button>
+                        <div class="search-box">
+                            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                            <input type="text" id="search-mtp-revenue" placeholder="ค้นหา..." oninput="handleSearch('mtp-revenue')">
+                        </div>
+                        <button class="btn btn-primary" onclick="openAddEntryModal('mtp-revenue')">+ เพิ่มรายการ</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table" id="table-mtp-revenue">
+                        <!-- Rendered dynamically -->
+                    </table>
+                </div>
+
+                <div class="table-footer">
+                    <div class="page-info" id="info-mtp-revenue"></div>
+                    <div class="page-controls" id="controls-mtp-revenue"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. JAMJUREE REVENUE TAB (จามจุรีย์ รายรับ) -->
+        <section id="view-jamjuree-revenue" class="tab-content">
+            <div class="table-section">
+                <div class="table-header">
+                    <h2 id="title-jamjuree-revenue">รายการบัญชี จามจุรีย์ รายรับ</h2>
+                    <div class="search-and-actions">
+                        <button class="btn btn-secondary" onclick="quickImportForSheet('jamjuree-revenue')" style="background-color: var(--accent-light); color: var(--accent-color); border-color: var(--border-hover);">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                            นำเข้า JSON
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportSingleSheetToExcel('jamjuree-revenue')">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                            ส่งออก Excel
+                        </button>
+                        <div class="search-box">
+                            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                            <input type="text" id="search-jamjuree-revenue" placeholder="ค้นหา..." oninput="handleSearch('jamjuree-revenue')">
+                        </div>
+                        <button class="btn btn-primary" onclick="openAddEntryModal('jamjuree-revenue')">+ เพิ่มรายการ</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table" id="table-jamjuree-revenue">
+                        <!-- Rendered dynamically -->
+                    </table>
+                </div>
+
+                <div class="table-footer">
+                    <div class="page-info" id="info-jamjuree-revenue"></div>
+                    <div class="page-controls" id="controls-jamjuree-revenue"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. T-WASH LOANS TAB (เงินยืม ที.วอช) -->
+        <section id="view-twash-loans" class="tab-content">
+            <div class="table-section">
+                <div class="table-header">
+                    <h2 id="title-twash-loans">รายการบัญชี 2. เงินยืม ที.วอช</h2>
+                    <div class="search-and-actions">
+                        <button class="btn btn-secondary" onclick="quickImportForSheet('twash-loans')" style="background-color: var(--accent-light); color: var(--accent-color); border-color: var(--border-hover);">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                            นำเข้า JSON
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportSingleSheetToExcel('twash-loans')">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                            ส่งออก Excel
+                        </button>
+                        <div class="search-box">
+                            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                            <input type="text" id="search-twash-loans" placeholder="ค้นหา..." oninput="handleSearch('twash-loans')">
+                        </div>
+                        <button class="btn btn-primary" onclick="openAddEntryModal('twash-loans')">+ เพิ่มรายการ</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table" id="table-twash-loans">
+                        <!-- Rendered dynamically -->
+                    </table>
+                </div>
+
+                <div class="table-footer">
+                    <div class="page-info" id="info-twash-loans"></div>
+                    <div class="page-controls" id="controls-twash-loans"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 8. UNCLE SAWAENG LOANS TAB (กู้เงินอาแสวง) -->
+        <section id="view-asawaeng-loans" class="tab-content">
+            <div class="table-section">
+                <div class="table-header">
+                    <h2 id="title-asawaeng-loans">รายการบัญชี 3. เงินกู้ คุณอาแสวง</h2>
+                    <div class="search-and-actions">
+                        <button class="btn btn-secondary" onclick="quickImportForSheet('asawaeng-loans')" style="background-color: var(--accent-light); color: var(--accent-color); border-color: var(--border-hover);">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                            นำเข้า JSON
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportSingleSheetToExcel('asawaeng-loans')">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                            ส่งออก Excel
+                        </button>
+                        <div class="search-box">
+                            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                            <input type="text" id="search-asawaeng-loans" placeholder="ค้นหา..." oninput="handleSearch('asawaeng-loans')">
+                        </div>
+                        <button class="btn btn-primary" onclick="openAddEntryModal('asawaeng-loans')">+ เพิ่มรายการ</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table" id="table-asawaeng-loans">
+                        <!-- Rendered dynamically -->
+                    </table>
+                </div>
+
+                <div class="table-footer">
+                    <div class="page-info" id="info-asawaeng-loans"></div>
+                    <div class="page-controls" id="controls-asawaeng-loans"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 9. WAN COMPANY LOANS TAB (กู้เงิน บ.วัน) -->
+        <section id="view-wan-loans" class="tab-content">
+            <div class="table-section">
+                <div class="table-header">
+                    <h2 id="title-wan-loans">รายการบัญชี 4. เงินกู้ บ.วัน</h2>
+                    <div class="search-and-actions">
+                        <button class="btn btn-secondary" onclick="quickImportForSheet('wan-loans')" style="background-color: var(--accent-light); color: var(--accent-color); border-color: var(--border-hover);">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                            นำเข้า JSON
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportSingleSheetToExcel('wan-loans')">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                            ส่งออก Excel
+                        </button>
+                        <div class="search-box">
+                            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                            <input type="text" id="search-wan-loans" placeholder="ค้นหา..." oninput="handleSearch('wan-loans')">
+                        </div>
+                        <button class="btn btn-primary" onclick="openAddEntryModal('wan-loans')">+ เพิ่มรายการ</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table" id="table-wan-loans">
+                        <!-- Rendered dynamically -->
+                    </table>
+                </div>
+
+                <div class="table-footer">
+                    <div class="page-info" id="info-wan-loans"></div>
+                    <div class="page-controls" id="controls-wan-loans"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7. PIMAS EXPENSES TAB (พี่มัสสำรองจ่าย) -->
+        <section id="view-pimas-expenses" class="tab-content">
+            <div class="table-section">
+                <div class="table-header">
+                    <h2 id="title-pimas-expenses">รายการบัญชี 5. เงินสำรองจ่าย พี่มัด</h2>
+                    <div class="search-and-actions">
+                        <button class="btn btn-secondary" onclick="exportSingleSheetToExcel('pimas-expenses')">
+                            <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:currentColor; margin-right:0.25rem;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+                            ส่งออก Excel
+                        </button>
+                        <div class="search-box">
+                            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                            <input type="text" id="search-pimas-expenses" placeholder="ค้นหา..." oninput="handleSearch('pimas-expenses')">
+                        </div>
+                        <button class="btn btn-primary" onclick="openAddEntryModal('pimas-expenses')">+ เพิ่มรายการ</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table" id="table-pimas-expenses">
+                        <!-- Rendered dynamically -->
+                    </table>
+                </div>
+
+                <div class="table-footer">
+                    <div class="page-info" id="info-pimas-expenses"></div>
+                    <div class="page-controls" id="controls-pimas-expenses"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 8. SETTINGS VIEW -->
+        <section id="view-settings" class="tab-content">
+            <div class="dashboard-card" style="max-width: 800px; margin: 0 auto 1.5rem;">
+                <h2 style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">ตั้งค่าความแม่นยำ AI (Gemini API)</h2>
+                
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="api-key-input">Gemini API Key</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="password" id="api-key-input" class="standard-input" placeholder="AIzaSy..." style="flex-grow: 1;">
+                            <button class="btn btn-secondary" onclick="toggleApiKeyShow()">
+                                <span id="toggle-key-text">แสดง</span>
+                            </button>
+                        </div>
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">
+                            สมัครใช้ฟรีเพื่อความแม่นยำสูงสุดรวมถึงภาษาไทยได้ที่ <a href="https://aistudio.google.com/" target="_blank" style="color:var(--accent-color); font-weight:600;">Google AI Studio</a>. คีย์ของท่านจะจัดเก็บอยู่ในเบราว์เซอร์นี้โดยตรง
+                        </p>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+                        <button class="btn btn-primary" onclick="saveApiKey()">บันทึกคีย์</button>
+                        <button class="btn btn-secondary" onclick="testApiKeyConnection()">ทดสอบเชื่อมต่อ</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card" style="max-width: 800px; margin: 0 auto;">
+                <h2 style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem;">การจัดการฐานข้อมูลและสารสนเทศ</h2>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <!-- Database Backups -->
+                    <div>
+                        <h4 style="font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary);">นำเข้าและสำรองข้อมูล</h4>
+                        <p style="font-size:0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">สำรองบัญชีหรือนำเข้าข้อมูลที่เคยบันทึกไว้ในระบบ</p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <button class="btn btn-secondary" style="width: 100%; justify-content: center;" onclick="backupDatabaseJSON()">
+                                สำรองข้อมูลทั้งหมด (JSON)
+                            </button>
+                            
+                            <div class="form-group">
+                                <input type="file" id="import-db-file" accept=".json" style="display: none;" onchange="importDatabaseJSON(event)">
+                                <button class="btn btn-secondary" style="width: 100%; justify-content: center;" onclick="triggerImportFileInput()">
+                                    นำเข้าข้อมูลสำรอง (JSON)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Database manipulation/actions -->
+                    <div>
+                        <h4 style="font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary);">การบำรุงรักษา</h4>
+                        <p style="font-size:0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">ล้างข้อมูลหรือทดลองใช้งานระบบผ่านฐานข้อมูลสาธิต</p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <button class="btn btn-secondary" style="width: 100%; justify-content: center; background-color: var(--accent-light); color: var(--accent-color); border-color: var(--border-hover);" onclick="loadMtpDemoDatabase()">
+                                โหลดข้อมูลบัญชีจำลอง (กรกฎาคม 2569)
+                            </button>
+                            <button class="btn btn-danger" style="width: 100%; justify-content: center;" onclick="triggerWipeDatabase()">
+                                ล้างฐานข้อมูลทั้งหมด
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>&copy; 2026 MTP Wood Thailand. ระบบสรุปผลวิเคราะห์การเงินและข้อมูลเดินบัญชีบูรณาการทุกแผ่นงานในธีม ขาว-น้ำตาล</p>
+        </footer>
+    </div>
+
+    <!-- SHARE CONFIGURATION DIALOG POPUP -->
+    <div class="modal-mask" id="share-modal">
+        <div class="modal-window" style="max-width: 520px;">
+            <div class="modal-title-bar">
+                <h3>📤 แบ่งปันรายงานงบการเงิน</h3>
+                <button onclick="closeShareModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+            </div>
+            <div class="modal-body-content" style="display: flex; flex-direction: column; gap: 1.25rem;">
+
+                <!-- jsonbin API Key -->
+                <div style="background: var(--accent-light); border: 1px solid var(--accent-color); border-radius: var(--border-radius); padding: 0.85rem 1rem;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-color); margin-bottom: 0.5rem;">🔑 jsonbin.io API Key (สำหรับลิงก์สั้นที่เปิดได้ทุกเครื่อง)</div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="password" id="jsonbin-api-key-input" class="standard-input"
+                            placeholder="$2a$10$xxxxxxxx…  (สมัครฟรีที่ jsonbin.io)"
+                            style="flex-grow: 1; font-size: 0.8rem; font-family: monospace;"
+                            value="">
+                        <button class="btn btn-secondary" onclick="saveJsonbinKey()" style="padding: 0.4rem 0.85rem; font-size: 0.8rem; white-space: nowrap;">บันทึก Key</button>
+                    </div>
+                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem;">
+                        ถ้าไม่ใส่ Key → ระบบสร้างลิงก์ยาว (Base64) ที่ใช้ได้เฉพาะ localhost
+                    </div>
+                </div>
+
+                <!-- Permission -->
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">เลือกระดับสิทธิ์การเข้าถึง:</p>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <label style="display: flex; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); cursor: pointer;" id="share-opt-readonly-label">
+                        <input type="radio" name="share-permission" id="share-perm-readonly" value="readonly" checked onchange="updateGeneratedShareLink()" style="margin-top: 0.25rem;">
+                        <div>
+                            <strong style="font-size: 0.9rem; color: var(--text-primary);">👁️ View Only (ดูอย่างเดียว)</strong>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">ผู้รับจะดูรายงานได้ครบ แต่แก้ไขข้อมูลไม่ได้</div>
+                        </div>
+                    </label>
+                    <label style="display: flex; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); cursor: pointer;" id="share-opt-editable-label">
+                        <input type="radio" name="share-permission" id="share-perm-editable" value="editable" onchange="updateGeneratedShareLink()" style="margin-top: 0.25rem;">
+                        <div>
+                            <strong style="font-size: 0.9rem; color: var(--text-primary);">✏️ Editable (แก้ไขได้)</strong>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;">ผู้รับสามารถป้อนข้อมูลเพิ่มและบันทึกทับลงเครื่องตัวเองได้</div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Generated Link -->
+                <div class="form-group" style="margin-top: 0.25rem;">
+                    <label class="form-label" for="generated-share-url">ลิงก์สำหรับส่งต่อ</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="generated-share-url" class="standard-input" readonly
+                            placeholder="กด 'สร้างลิงก์' เพื่อสร้างลิงก์สั้น"
+                            style="background-color: var(--accent-light); font-size: 0.8rem; font-family: monospace; flex-grow: 1; border-color: var(--border-color);">
+                        <button class="btn btn-primary" id="btn-copy-share-link" onclick="copyShareLinkToClipboard()" style="padding: 0.5rem 1rem; font-size: 0.8rem; white-space: nowrap;">📋 คัดลอกลิงก์</button>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="updateGeneratedShareLink()" style="width: 100%; padding: 0.6rem; font-size: 0.9rem;">
+                    🔗 สร้างลิงก์สั้น (Upload to Cloud)
+                </button>
+
+                <!-- Netlify tip -->
+                <div style="background: var(--bg-secondary); border-radius: var(--border-radius); padding: 0.75rem 1rem; font-size: 0.75rem; color: var(--text-muted); border: 1px solid var(--border-color);">
+                    <strong style="color: var(--text-secondary);">💡 เปิดได้จากทุกเครื่อง:</strong>
+                    ลาก folder <code>ReceiptToExpense/</code> ไปวางที่ <a href="https://app.netlify.com/drop" target="_blank" style="color: var(--accent-color);">netlify.com/drop</a> แล้วใช้ URL ของ Netlify แทน localhost
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- REUSABLE ADD ENTRY MODAL DIALOG -->
+    <div class="modal-mask" id="entry-modal">
+        <div class="modal-window">
+            <div class="modal-title-bar">
+                <h3 id="modal-entry-title">เพิ่มข้อมูลการเงิน</h3>
+                <button onclick="closeEntryModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+            </div>
+            
+            <div class="modal-body-content">
+                <form id="entry-form" onsubmit="handleFormSubmit(event)">
+                    <!-- Hidden field to track target tab -->
+                    <input type="hidden" id="entry-target-sheet" value="">
+
+                    <div class="form-grid" id="form-dynamic-fields">
+                        <!-- Fields populated dynamically based on active sheet -->
+                    </div>
+                </form>
+            </div>
+
+            <div class="modal-action-bar">
+                <button class="btn btn-secondary" onclick="closeEntryModal()">ยกเลิก</button>
+                <button class="btn btn-primary" type="submit" form="entry-form">บันทึกข้อมูล</button>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- Confirm Modal Dialog -->
+    <div class="modal-mask" id="confirm-modal">
+        <div class="modal-window" style="max-width: 420px;">
+            <div class="modal-title-bar">
+                <h3 id="confirm-modal-title">ยืนยันการทำรายการ</h3>
+                <button onclick="closeConfirmModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+            </div>
+            <div class="modal-body-content" id="confirm-modal-body" style="font-size: 0.95rem; color: var(--text-secondary);">
+                คุณแน่ใจที่จะดำเนินการนี้หรือไม่? ข้อมูลจะถูกลบอย่างถาวร
+            </div>
+            <div class="modal-action-bar">
+                <button class="btn btn-secondary" onclick="closeConfirmModal()">ยกเลิก</button>
+                <button class="btn btn-primary" id="confirm-modal-btn" style="background-color: var(--danger-color);">ยืนยันทำรายการ</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- VENDOR AUDIT DETAILS MODAL -->
+    <div class="modal-mask" id="audit-modal">
+        <div class="modal-window" style="max-width: 750px;">
+            <div class="modal-title-bar">
+                <h3 id="audit-modal-title" style="color: var(--accent-color); font-weight:700;">ประวัติการชำระเงิน</h3>
+                <button onclick="closeAuditModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+            </div>
+            <div class="modal-body-content" style="max-height: 400px; overflow-y: auto; padding: 1rem 0;">
+                <table class="data-table" id="audit-modal-table">
+                    <!-- Loaded dynamically -->
+                </table>
+            </div>
+            <div class="modal-action-bar">
+                <button class="btn btn-secondary" onclick="closeAuditModal()">ปิดหน้าต่าง</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Toasts Notifications Container -->
+    <div class="toasts-box" id="toasts-box"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
