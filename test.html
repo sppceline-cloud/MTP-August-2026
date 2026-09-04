@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTP Wood Thailand - Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 2rem; background: #fdfbf7; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #3c2f2f; }
+        .status { padding: 1rem; background: #f2f5f0; border-radius: 8px; }
+        .success { color: #5d6e53; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✅ MTP Wood Thailand - System Running</h1>
+        <div class="status">
+            <p class="success">✓ HTML is loading</p>
+            <p class="success">✓ CSS is applied</p>
+            <p>JavaScript status: <span id="js-status">⏳ Loading...</span></p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('js-status').innerHTML = '✓ JavaScript working!';
+        console.log('✅ System initialized successfully!');
+    </script>
+</body>
+</html>
